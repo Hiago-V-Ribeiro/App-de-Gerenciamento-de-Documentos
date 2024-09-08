@@ -21,7 +21,6 @@ class Lista : AppCompatActivity() {
 
     private val TAG = "WallpaperPermission"
     private val MY_REQUEST_CODE = 111
-    private lateinit var binding: ActivityMainBinding
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
