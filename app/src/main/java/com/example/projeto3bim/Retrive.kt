@@ -1,14 +1,12 @@
 package com.example.projeto3bim
 
 import android.content.Intent
-import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
-import android.view.View
-import android.view.ViewGroup
+import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.ListView
-import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
@@ -18,64 +16,57 @@ import com.google.firebase.database.ValueEventListener
 
 class Retrive : AppCompatActivity() {
 
-    private lateinit var listView: ListView
     private lateinit var dbRef: DatabaseReference
-    private val uploadedPDF: MutableList<putPDF> = mutableListOf()
+    private lateinit var listView: ListView
+    private val documentList = mutableListOf<String>()
+    private val documentUriMap = mutableMapOf<String, String>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.retrive)
 
         listView = findViewById(R.id.ListView)
-        retrievePDF()
+        dbRef = FirebaseDatabase.getInstance().getReference("uploadPDF")
 
+        fetchDocuments()
 
-
-        listView.setOnItemClickListener { _, _, position, _ ->
-            val putPDF = uploadedPDF[position]
-
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                type = "application/pdf"
-                data = Uri.parse(putPDF.url)
-            }
-            startActivity(intent)
+        listView.onItemClickListener = AdapterView.OnItemClickListener { _, _, position, _ ->
+            val selectedDocument = documentList[position]
+            val uri = documentUriMap[selectedDocument]
+            uri?.let {
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(Uri.parse(it), "application/pdf")
+                    flags = Intent.FLAG_ACTIVITY_NO_HISTORY
+                }
+                startActivity(intent)
+            } ?: Toast.makeText(this, "Failed to open document", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun retrievePDF() {
-        dbRef = FirebaseDatabase.getInstance().getReference("uploadPDF")
-
+    private fun fetchDocuments() {
         dbRef.addValueEventListener(object : ValueEventListener {
-            override fun onDataChange(dataSnapshot: DataSnapshot) {
-                uploadedPDF.clear() // Limpar lista antes de adicionar novos dados
-                for (ds in dataSnapshot.children) {
-                    val putPDF = ds.getValue(com.example.projeto3bim.putPDF::class.java)
-                    if (putPDF != null) {
-                        uploadedPDF.add(putPDF)
+            override fun onDataChange(snapshot: DataSnapshot) {
+                documentList.clear()
+                documentUriMap.clear()
+                for (data in snapshot.children) {
+                    val fileName = data.child("name").getValue(String::class.java)
+                    val fileUri = data.child("url").getValue(String::class.java)
+                    if (fileName != null && fileUri != null) {
+                        documentList.add(fileName)
+                        documentUriMap[fileName] = fileUri
                     }
                 }
-
-                val uploadsName = Array(uploadedPDF.size) { "" }
-                for (i in uploadsName.indices) {
-                    uploadsName[i] = uploadedPDF[i].name
-                }
-
-                val arrayAdapter = object : ArrayAdapter<String>(this@Retrive, android.R.layout.simple_list_item_1, uploadsName) {
-
-                    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-                        val view = super.getView(position, convertView, parent)
-                        val textView = view.findViewById<TextView>(android.R.id.text1)
-                        textView.setTextColor(Color.BLACK)
-                        textView.textSize = 20f
-                        return view
-                    }
-                }
-
-                listView.adapter = arrayAdapter
+                updateListView()
             }
 
-            override fun onCancelled(databaseError: DatabaseError) {
+            override fun onCancelled(error: DatabaseError) {
+                Toast.makeText(this@Retrive, "Failed to load documents", Toast.LENGTH_SHORT).show()
             }
         })
+    }
+
+    private fun updateListView() {
+        val adapter = ArrayAdapter(this, android.R.layout.simple_list_item_1, documentList)
+        listView.adapter = adapter
     }
 }
